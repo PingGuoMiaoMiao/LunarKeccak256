@@ -1,21 +1,28 @@
-///| Keccak 状态结构和核心算法实现
+///|
+/// Keccak 状态结构和核心算法实现
 
 // Keccak 状态：5x5 的 UInt64 数组，共 1600 位
 priv struct State {
-  a : Array[UInt64]  // 25 个 64 位字
+  a : Array[UInt64] // 25 个 64 位字
 }
 
 // 创建新的空状态
+
+///|
 fn State::new() -> State {
   { a: Array::make(25, 0UL) }
 }
 
 // 获取状态中的元素 (x, y 坐标)
+
+///|
 fn State::get(self : State, x : Int, y : Int) -> UInt64 {
   self.a[x + 5 * y]
 }
 
 // 设置状态中的元素 (x, y 坐标)
+
+///|
 fn State::set(self : State, x : Int, y : Int, value : UInt64) -> Unit {
   self.a[x + 5 * y] = value
 }
@@ -27,10 +34,8 @@ fn State::set(self : State, x : Int, y : Int, value : UInt64) -> Unit {
 let rate_bytes : Int = 136 // r = 1088 bits = 136 bytes
 
 ///|
-let capacity_bytes : Int = 64 // c = 512 bits = 64 bytes
-
-///|
 let output_bytes : Int = 32 // 256 bits = 32 bytes
+// capacity_bytes = 64  // c = 512 bits = 64 bytes (隐含在 rate 中)
 
 // Keccak-f[1600] 的轮次数
 
@@ -60,9 +65,11 @@ let rho_offsets : Array[Int] = [
 ///|
 /// Keccak-f[1600] 置换的五个步骤
 
-// 辅助函数：64 位循环左移
+// 辅助函数：64 位循环左移（编译器会自动内联小函数）
 fn rotl64(x : UInt64, n : Int) -> UInt64 {
-  (x << n.reinterpret_as_uint()) | (x >> (64 - n).reinterpret_as_uint())
+  let shift_left = n.reinterpret_as_uint().reinterpret_as_int()
+  let shift_right = (64 - n).reinterpret_as_uint().reinterpret_as_int()
+  (x << shift_left) | (x >> shift_right)
 }
 
 // θ (theta) 步骤
@@ -98,11 +105,10 @@ fn theta(state : State) -> Unit {
 
 ///|
 fn rho(state : State) -> Unit {
-  for x = 0; x < 5; x = x + 1 {
-    for y = 0; y < 5; y = y + 1 {
-      let offset = rho_offsets[x + 5 * y]
-      state.set(x, y, rotl64(state.get(x, y), offset))
-    }
+  // 优化：直接数组访问，减少函数调用开销
+  for i = 0; i < 25; i = i + 1 {
+    let offset = rho_offsets[i]
+    state.a[i] = rotl64(state.a[i], offset)
   }
 }
 
@@ -153,7 +159,8 @@ fn chi(state : State) -> Unit {
 
 ///|
 fn iota(state : State, round : Int) -> Unit {
-  state.set(0, 0, state.get(0, 0) ^ round_constants[round])
+  // 优化：直接数组访问
+  state.a[0] = state.a[0] ^ round_constants[round]
 }
 
 ///|
@@ -245,7 +252,8 @@ fn squeeze(state : State, output_len : Int, rate : Int) -> Array[Byte] {
         8
       }
       for j = 0; j < bytes_in_word; j = j + 1 {
-        output[output_offset + i * 8 + j] = (word >> (j * 8).reinterpret_as_uint())
+        let shift = (j * 8).reinterpret_as_uint().reinterpret_as_int()
+        output[output_offset + i * 8 + j] = (word >> shift)
           .land(0xFFUL)
           .to_byte()
       }
@@ -292,7 +300,10 @@ pub fn keccak256_hex(message : Array[Byte]) -> String {
 pub fn keccak256_string(message : String) -> Array[Byte] {
   let bytes : Array[Byte] = Array::make(message.length(), b'\x00')
   for i = 0; i < message.length(); i = i + 1 {
-    bytes[i] = message.get(i).to_int().to_byte()
+    match message.get(i) {
+      Some(code_point) => bytes[i] = code_point.to_byte()
+      None => bytes[i] = b'\x00'
+    }
   }
   keccak256(bytes)
 }

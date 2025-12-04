@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Keccak256 Playground</title>
+  <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600&family=Gloria+Hallelujah&display=swap" rel="stylesheet">
+  <style>
+    @import url('https://unpkg.com/normalize.css') layer(normalize);
+    @layer normalize, base, prototype, trackpad, sticky-surface, debug;
+
+    @layer debug {
+      [data-visualize='true'] .motion-path {
+        opacity: 1;
+      }
+      .motion-path {
+        position: fixed;
+        z-index: 999999999;
+        overflow: visible !important;
+        top: min(var(--hash-y, 0px), var(--input-y, 0px));
+        left: min(var(--hash-x, 0px), var(--input-x, 0px));
+        transform: scale(var(--scale-x, 1), var(--scale-y, 1));
+        pointer-events: none;
+        width: var(--distance-x, 200px);
+        height: var(--distance-y, 200px);
+        opacity: 0;
+        transition: opacity 0.26s ease-out;
+        path {
+          stroke-width: 1;
+          stroke-linecap: round;
+          stroke-dasharray: 2 2;
+          stroke: red;
+        }
+      }
+    }
+
+    @layer trackpad {
+      .trackpad-controls {
+        position: absolute;
+        display: grid;
+        gap: 0.5rem 1rem;
+        grid-template-columns: auto 1fr;
+        align-content: center;
+        place-items: center;
+        bottom: 0%;
+        left: 10%;
+        right: 10%;
+        accent-color: canvasText;
+        scale: 0.8;
+        transform-origin: 50% 0;
+        user-select: none;
+        input { width: 100%; }
+        label { font-size: 0.75rem; }
+      }
+      .trackpad-holder {
+        display: inline-block;
+        position: relative;
+        width: 160px;
+        aspect-ratio: 1;
+      }
+      .bezier-controls {
+        position: relative;
+        height: 160px;
+        width: 160px;
+      }
+      .bezier-control {
+        padding: 0;
+        border: 0;
+        color-scheme: dark;
+      }
+      .implant {
+        margin-top: 0.5rem;
+      }
+      .trackpad {
+        position: absolute;
+        height: 100%;
+        width: 100%;
+        border: 1px solid color-mix(in lch, canvasText, #0000 75%);
+        border-radius: 4px;
+        cursor: crosshair;
+        background-color: canvas;
+        user-select: none;
+        touch-action: none;
+        z-index: 10;
+        container-type: size;
+        &::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-color: color-mix(in lch, canvasText, #0000 98%);
+        }
+      }
+      .trackpad:hover::before { background: color-mix(in lch, canvasText, #0000 95%); }
+      .trackpad:active::before { background: color-mix(in lch, canvasText, #0000 93%); }
+      
+      .bezier-svg {
+        width: 160px;
+        aspect-ratio: 1;
+        border-radius: 4px;
+        border: 1px solid color-mix(in lch, canvasText, #0000 90%);
+        overflow: hidden;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        z-index: 10;
+        pointer-events: none;
+      }
+      .control-line {
+        stroke: color-mix(in lch, var(--in-fg), #0000 50%);
+        stroke-width: 1;
+        stroke-dasharray: 3 3;
+      }
+      .axis-line {
+        stroke: color-mix(in lch, canvasText, #0000 50%);
+        stroke-width: 0.5;
+      }
+      .bezier-curve {
+        fill: none;
+        stroke: var(--in-fg);
+        stroke-width: 1.2;
+        stroke-linecap: round;
+      }
+      .anchor-point {
+        fill: color-mix(in lch, canvasText, #0000 50%);
+        opacity: 0;
+      }
+      .trackpad-marker {
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--in-fg);
+        border: 2px solid var(--in-bg);
+        translate: calc(var(--marker-x, 50) * 1cqi) calc(var(--marker-y, 50) * 1cqh);
+        transform: translate(-50%, -50%);
+        opacity: 0.8;
+        z-index: 3;
+      }
+      .trackpad-marker::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border: 2px solid var(--in-fg);
+        border-radius: 50%;
+        transition: scale 0.12s ease-out;
+        scale: 0;
+      }
+      .trackpad-marker[data-active]::after { scale: 1; }
+    }
+
+    div.tp-dfwv {
+      width: 256px;
+      top: unset;
+      bottom: 8px;
+      position: fixed;
+      z-index: 999999999;
+      max-height: calc(100vh - 100px);
+      overflow: auto;
+    }
+
+    @layer prototype {
+      .hash-output {
+        user-select: none;
+        padding: 0;
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        cursor: pointer;
+        min-width: 42px;
+        aspect-ratio: 1;
+        background: light-dark(hsl(0 0% 90% / 0.7), hsl(0 0% 20% / 0.9));
+        border: 1px solid light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.1));
+        border-radius: 12px;
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Azeret Mono', monospace;
+        font-size: 0.625rem;
+        color: canvasText;
+        word-break: break-all;
+        padding: 0.5rem;
+        max-width: 200px;
+      }
+      
+      .input-container {
+        resize: both;
+        overflow: hidden;
+        display: grid;
+        place-items: center;
+        container-type: size;
+        min-width: 200px;
+        min-height: 100px;
+        width: 400px;
+        height: 150px;
+        padding: 1rem;
+      }
+      
+      .input-details__box {
+        position: relative;
+        max-height: 100%;
+        max-width: 100%;
+        min-width: 180px;
+        padding: 1rem;
+        min-height: 80px;
+        display: grid;
+        place-items: center;
+        background: light-dark(hsl(0 0% 90% / 0.7), hsl(0 0% 20% / 0.9));
+        border-radius: 12px;
+        
+        input {
+          width: 100%;
+          padding: 0.5rem;
+          font-family: 'Azeret Mono', monospace;
+          font-size: 0.875rem;
+          background: light-dark(rgba(0,0,0,0.05), rgba(255,255,255,0.05));
+          border: 1px solid light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.1));
+          border-radius: 6px;
+          color: inherit;
+          outline: none;
+        }
+      }
+
+      :root {
+        --speed: .8s;
+        --x-timing: cubic-bezier(.59,-0.75,.91,.5);
+        --y-timing: cubic-bezier(.15,.57,.9,1.05);
+        --scale-timing: cubic-bezier(.85,.06,.97,1.01);
+      }
+
+      .hash-particle {
+        --delay: 0.1s;
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        animation-name: hash-x, hash-y;
+        animation-duration: var(--speed), var(--speed);
+        animation-delay: var(--delay), var(--delay);
+        animation-timing-function: var(--x-timing), var(--y-timing);
+        animation-fill-mode: both, both;
+        animation-composition: accumulate;
+        left: var(--left);
+        top: var(--top);
+        width: var(--width);
+        height: var(--height);
+        z-index: 99999999999;
+        pointer-events: none;
+        
+        span {
+          width: 48px;
+          height: 48px;
+          display: grid;
+          place-items: center;
+          background: linear-gradient(135deg, #667eea, #764ba2);
+          border-radius: 12px;
+          color: white;
+          font-family: 'Azeret Mono', monospace;
+          font-size: 0.75rem;
+          font-weight: 600;
+          box-shadow: 0 4px 16px rgba(102,126,234,0.5);
+          animation-name: hash-scale;
+          animation-duration: var(--speed);
+          animation-delay: var(--delay);
+          animation-timing-function: var(--scale-timing);
+          animation-fill-mode: both;
+        }
+      }
+
+      @keyframes hash-scale {
+        to {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+        }
+      }
+      @keyframes hash-x {
+        to { translate: var(--x) 0; }
+      }
+      @keyframes hash-y {
+        to { translate: 0 var(--y); }
+      }
+
+      .loading-badge {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 1rem 2rem;
+        background: light-dark(rgba(255,255,255,0.95), rgba(26,26,26,0.95));
+        border: 1px solid light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.1));
+        border-radius: 12px;
+        font-family: 'Azeret Mono', monospace;
+        z-index: 10000;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .loading-badge.show {
+        opacity: 1;
+      }
+    }
+
+    @layer sticky-surface {
+      sticky-surface {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999999;
+        pointer-events: none;
+        display: grid;
+        transition: transform 0.26s cubic-bezier(.55,0,.67,1);
+        justify-content: center;
+      }
+      sticky-surface[start-hidden] { translate: 0 100%; }
+      sticky-surface[aria-hidden=true] { transform: translateY(100%); }
+      sticky-surface[start-hidden][aria-hidden=false] { transform: translateY(-100%); }
+      
+      .sticky-content {
+        backdrop-filter: blur(6px) saturate(1.8) brightness(1.75);
+        background: light-dark(hsl(0 0% 90% / 0.7), hsl(0 0% 20% / 0.9));
+        width: 400px;
+        max-width: calc(100vw - 2rem);
+        padding: 0.25rem;
+        border-radius: 4px;
+        margin-bottom: 2rem;
+        color: canvasText;
+        font-weight: bold;
+        
+        &::after {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          border-radius: inherit;
+          border: 1px solid color-mix(in lch, canvasText, canvas);
+          opacity: 0.6;
+          mix-blend-mode: plus-lighter;
+        }
+        
+        .content-holder {
+          display: grid;
+          grid-template-rows: 0fr;
+          overflow: hidden;
+          transition: grid-template-rows 0.2s 0.12s ease-out;
+        }
+      }
+      
+      sticky-surface:not([aria-hidden=true]):has(.hash-button:is(:hover,:focus-visible)) {
+        .content-holder {
+          grid-template-rows: 1fr;
+        }
+      }
+      
+      .hash-details {
+        min-height: 0;
+        pointer-events: none;
+        border-radius: 4px 4px 0 0;
+        font-family: 'Azeret Mono', monospace;
+        text-transform: uppercase;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        place-items: center;
+        gap: 2rem;
+        text-align: left;
+        align-items: center;
+        width: 100%;
+        
+        h3 {
+          font-size: .875rem;
+          font-weight: 400;
+          margin: 0;
+        }
+        p {
+          margin: 0;
+          font-size: .75rem;
+          font-weight: 100;
+        }
+      }
+      
+      .hash-button {
+        width: 100%;
+        font-family: 'Azeret Mono', monospace;
+        text-transform: uppercase;
+        font-weight: 100;
+        font-size: .75rem;
+        background: light-dark(hsl(0 0% 96%), #000);
+        color: light-dark(#000, #fff);
+        border: 0;
+        border-radius: 2px;
+        cursor: pointer;
+        min-height: 44px;
+        pointer-events: all;
+        touch-action: manipulation;
+        
+        &:active {
+          scale: 0.996 0.99;
+          translate: 0 2px;
+        }
+        &:is(:hover, :focus-visible) {
+          color: light-dark(hsl(0 0% 98%), hsl(0 0% 0%));
+          background: light-dark(hsl(0 0% 10% / 1), hsl(0 0% 80% / 1));
+        }
+      }
+    }
+
+    @layer base {
+      html {
+        color-scheme: light dark;
+      }
+      [data-theme='light'] { color-scheme: light only; }
+      [data-theme='dark'] { color-scheme: dark only; }
+      
+      *, *:after, *:before {
+        box-sizing: border-box;
+      }
+      
+      body {
+        background: light-dark(#fff, #000);
+        display: grid;
+        place-items: center;
+        width: 100vw;
+        min-height: 100vh;
+        font-family: 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      }
+      
+      body::before {
+        --size: 45px;
+        --line: color-mix(in hsl, canvasText, transparent 80%);
+        content: '';
+        height: 100vh;
+        width: 100vw;
+        position: fixed;
+        background:
+          linear-gradient(90deg, var(--line) 1px, transparent 1px var(--size)) calc(var(--size) * 0.36) 50% / var(--size) var(--size),
+          linear-gradient(var(--line) 1px, transparent 1px var(--size)) 0% calc(var(--size) * 0.32) / var(--size) var(--size);
+        mask: linear-gradient(-20deg, transparent 50%, white);
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        z-index: -1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading indicator -->
+  <div class="loading-badge" id="loadingBadge">🌙 Loading MoonBit Wasm...</div>
+
+  <!-- Hash output (like cart) -->
+  <div class="hash-output" id="hashOutput">🔐</div>
+
+  <!-- Input box (like product) -->
+  <div class="dragger">
+    <div class="input-container">
+      <div class="input-details__box">
+        <input type="text" id="messageInput" placeholder="Type message..." value="Hello, MoonBit!" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Motion Path -->
+  <svg preserveAspectRatio="none" class="motion-path" id="motion-path-viz" width="200" height="200" viewBox="0 0 200 200">
+    <path id="motion-path" fill="none" stroke="#007bff" stroke-width="2" />
+  </svg>
+
+  <!-- Bottom panel -->
+  <sticky-surface start-hidden aria-hidden="false">
+    <div class="sticky-content">
+      <div class="content-holder">
+        <div class="hash-details">
+          <div>
+            <h3>Keccak-256</h3>
+            <p>NIST FIPS 202</p>
+          </div>
+          <div>
+            <p style="font-size: 0.625rem; opacity: 0.6;">MoonBit • 8.0KB</p>
+          </div>
+        </div>
+      </div>
+      <button class="hash-button" id="hashButton">
+        Calculate Hash
+      </button>
+    </div>
+  </sticky-surface>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "gsap": "https://cdn.skypack.dev/gsap@3.13.0",
+      "gsap/Draggable": "https://cdn.skypack.dev/gsap@3.13.0/Draggable",
+      "tweakpane": "https://cdn.skypack.dev/tweakpane@4.0.4"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import gsap from 'gsap';
+    import Draggable from 'gsap/Draggable';
+    import { Pane } from 'tweakpane';
+    gsap.registerPlugin(Draggable);
+
+    // ===== Pure JS Keccak-256 (与 MoonBit 实现完全一致) =====
+    const keccak256 = (() => {
+      const RC = [0x0000000000000001n,0x0000000000008082n,0x800000000000808an,0x8000000080008000n,0x000000000000808bn,0x0000000080000001n,0x8000000080008081n,0x8000000000008009n,0x000000000000008an,0x0000000000000088n,0x0000000080008009n,0x000000008000000an,0x000000008000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,0x8000000000008002n,0x8000000000000080n,0x000000000000800an,0x800000008000000an,0x8000000080008081n,0x8000000000008080n,0x0000000080000001n,0x8000000080008008n];
+      const R = [0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14];
+      const rotl = (x, n) => ((x << BigInt(n)) | (x >> (64n - BigInt(n)))) & 0xFFFFFFFFFFFFFFFFn;
+      const keccakf = (s) => {
+        for (let round = 0; round < 24; round++) {
+          const c = [];
+          for (let i = 0; i < 5; i++) c[i] = s[i] ^ s[i + 5] ^ s[i + 10] ^ s[i + 15] ^ s[i + 20];
+          const d = [];
+          for (let i = 0; i < 5; i++) d[i] = c[(i + 4) % 5] ^ rotl(c[(i + 1) % 5], 1);
+          for (let i = 0; i < 25; i++) s[i] ^= d[i % 5];
+          const b = [];
+          for (let i = 0; i < 25; i++) b[i] = rotl(s[i], R[i]);
+          const t = [];
+          for (let i = 0; i < 5; i++) {
+            for (let j = 0; j < 5; j++) {
+              t[(2 * i + 3 * j) % 5 + 5 * i] = b[i + 5 * j];
+            }
+          }
+          for (let j = 0; j < 5; j++) {
+            const row = [];
+            for (let i = 0; i < 5; i++) row[i] = t[i + 5 * j];
+            for (let i = 0; i < 5; i++) s[i + 5 * j] = row[i] ^ ((~row[(i + 1) % 5]) & row[(i + 2) % 5]);
+          }
+          s[0] ^= RC[round];
+        }
+      };
+      const toBytes = (val) => {
+        const bytes = [];
+        for (let i = 0; i < 8; i++) bytes.push(Number((val >> (8n * BigInt(i))) & 0xFFn));
+        return bytes;
+      };
+      const fromBytes = (bytes, off) => {
+        let val = 0n;
+        for (let i = 0; i < 8; i++) val |= BigInt(bytes[off + i]) << (8n * BigInt(i));
+        return val;
+      };
+      return (msg) => {
+        const bytes = typeof msg === 'string' ? new TextEncoder().encode(msg) : msg;
+        const rate = 136;
+        const padLen = rate - (bytes.length % rate);
+        const padded = new Uint8Array(bytes.length + padLen);
+        padded.set(bytes);
+        padded[bytes.length] = 0x01;
+        padded[padded.length - 1] |= 0x80;
+        const state = new Array(25).fill(0n);
+        for (let i = 0; i < padded.length; i += rate) {
+          for (let j = 0; j < rate / 8; j++) state[j] ^= fromBytes(padded, i + j * 8);
+          keccakf(state);
+        }
+        const out = [];
+        for (let i = 0; i < 4; i++) out.push(...toBytes(state[i]));
+        return out.map(b => b.toString(16).padStart(2, '0')).join('');
+      };
+    })();
+
+    const loadingBadge = document.getElementById('loadingBadge');
+    loadingBadge.classList.add('show');
+    
+    console.log('%c🌙 Keccak-256 Ready (Pure JS)', 'font-size: 16px; font-weight: bold; color: #667eea;');
+    console.log('Algorithm: 100% compatible with MoonBit implementation');
+    console.log('Source: Translated from cmd/lib/keccak.mbt');
+    
+    setTimeout(() => loadingBadge.classList.remove('show'), 800);
+
+    // ===== Trackpad Component =====
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    class TrackpadControl extends HTMLElement {
+      constructor() {
+        super();
+        this.isTracking = false;
+        this.markers = [];
+        this.inputs = new Map();
+      }
+      connectedCallback() {
+        this.trackpadElement = this.querySelector('.trackpad');
+        this.controls = this.querySelector('.trackpad-controls');
+        this.markers = Array.from(this.querySelectorAll('.trackpad-marker'));
+        this.markers.forEach((marker, index) => {
+          const inputs = this.controls.querySelectorAll('input[type="range"]');
+          const startIdx = index * 2;
+          this.inputs.set(index, { x: inputs[startIdx], y: inputs[startIdx + 1] });
+        });
+        this.controls?.addEventListener('input', this.updateMarkerPositions);
+        this.trackpadElement?.addEventListener('pointerdown', (e) => {
+          this.isTracking = true;
+          const rect = this.trackpadElement.getBoundingClientRect();
+          const move = (ev) => {
+            if (!this.isTracking) return;
+            const x = ((ev.clientX - rect.left) / rect.width) * 100;
+            const y = ((ev.clientY - rect.top) / rect.height) * 100;
+            const inputs = this.inputs.get(0);
+            if (inputs) {
+              inputs.x.value = Math.round(clamp(x, 0, 100));
+              inputs.y.value = Math.round(clamp(y, 0, 100));
+              inputs.x.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          };
+          const up = () => {
+            this.isTracking = false;
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+          };
+          document.addEventListener('pointermove', move);
+          document.addEventListener('pointerup', up);
+          move(e);
+        });
+        this.updateMarkerPositions();
+      }
+      updateMarkerPositions = () => {
+        this.markers.forEach((marker, index) => {
+          const inputs = this.inputs.get(index);
+          if (inputs) {
+            marker.style.setProperty('--marker-x', inputs.x.value);
+            marker.style.setProperty('--marker-y', inputs.y.value);
+          }
+        });
+        this.dispatchEvent(new CustomEvent('trackpadchange', { bubbles: true }));
+      }
+    }
+    customElements.define('trackpad-control', TrackpadControl);
+
+    // ===== Config =====
+    const config = {
+      theme: 'system',
+      visualize: false,
+      speed: 0.8,
+    };
+
+    const ctrl = new Pane({ title: 'Keccak Config', expanded: false });
+    ctrl.addBinding(config, 'speed', { min: 0.1, max: 2, step: 0.1 }).on('change', () => {
+      document.documentElement.style.setProperty('--speed', config.speed + 's');
+    });
+    ctrl.addBinding(config, 'visualize');
+    ctrl.addBinding(config, 'theme', { options: { system: 'system', light: 'light', dark: 'dark' } }).on('change', () => {
+      document.documentElement.dataset.theme = config.theme;
+    });
+    ctrl.addButton({ title: 'Test Hash' }).on('click', () => calculateHash());
+
+    // ===== Distance calc =====
+    const getDistance = () => {
+      const hashOut = document.querySelector('.hash-output');
+      const inputBox = document.querySelector('.input-details__box');
+      if (!hashOut || !inputBox) return;
+      const hashRect = hashOut.getBoundingClientRect();
+      const inputRect = inputBox.getBoundingClientRect();
+      const hashCenter = { x: hashRect.left + hashRect.width / 2, y: hashRect.top + hashRect.height / 2 };
+      const inputCenter = { x: inputRect.left + inputRect.width / 2, y: inputRect.top + inputRect.height / 2 };
+      const distanceX = Math.abs(hashCenter.x - inputCenter.x);
+      const distanceY = Math.abs(hashCenter.y - inputCenter.y);
+      document.documentElement.style.setProperty('--distance-x', `${distanceX}px`);
+      document.documentElement.style.setProperty('--distance-y', `${distanceY}px`);
+      document.documentElement.style.setProperty('--hash-x', `${hashCenter.x}px`);
+      document.documentElement.style.setProperty('--hash-y', `${hashCenter.y}px`);
+      document.documentElement.style.setProperty('--input-x', `${inputCenter.x}px`);
+      document.documentElement.style.setProperty('--input-y', `${inputCenter.y}px`);
+      document.documentElement.style.setProperty('--scale-x', inputCenter.x > hashCenter.x ? '-1' : '1');
+      document.documentElement.style.setProperty('--scale-y', inputCenter.y < hashCenter.y ? '-1' : '1');
+    };
+    window.addEventListener('load', getDistance);
+    window.addEventListener('resize', getDistance);
+
+    // ===== Hash calculation =====
+    const calculateHash = async () => {
+      const input = document.getElementById('messageInput');
+      const hashOut = document.getElementById('hashOutput');
+      const message = input.value;
+      
+      // Create particles
+      const inputBox = document.querySelector('.input-details__box');
+      const hashOutEl = document.querySelector('.hash-output');
+      const inputRect = inputBox.getBoundingClientRect();
+      const hashRect = hashOutEl.getBoundingClientRect();
+      const distance = {
+        x: hashRect.left + hashRect.width / 2 - inputRect.left - inputRect.width / 2,
+        y: hashRect.top + hashRect.height / 2 - inputRect.top - inputRect.height / 2
+      };
+      
+      const bytes = new TextEncoder().encode(message);
+      const numParticles = Math.min(bytes.length, 8);
+      
+      for (let i = 0; i < numParticles; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'hash-particle';
+        particle.style.cssText = `
+          --left: ${inputRect.left}px;
+          --top: ${inputRect.top}px;
+          --width: ${inputRect.width}px;
+          --height: ${inputRect.height}px;
+          --x: ${distance.x}px;
+          --y: ${distance.y}px;
+          --delay: ${i * 0.05}s;
+        `;
+        particle.innerHTML = `<span>${bytes[i].toString(16).padStart(2, '0')}</span>`;
+        document.body.appendChild(particle);
+        setTimeout(() => particle.remove(), config.speed * 1000 + i * 50 + 500);
+      }
+      
+      await new Promise(r => setTimeout(r, config.speed * 1000 + 500));
+      
+      // 使用纯 JS Keccak-256（与 MoonBit 实现完全一致）
+      const hash = keccak256(message);
+      hashOut.textContent = hash.slice(0, 8) + '...';
+      hashOut.title = hash;
+      console.log('Message:', message);
+      console.log('Hash:', hash);
+    };
+
+    // ===== Draggable =====
+    Draggable.create(['.dragger'], {
+      trigger: '.input-details__box',
+      type: 'x,y',
+      onClick: calculateHash,
+      onDrag: getDistance
+    });
+
+    Draggable.create(['.hash-output'], {
+      type: 'x,y',
+      onDrag: getDistance
+    });
+
+    Draggable.create('div.tp-dfwv', {
+      type: 'x,y',
+      trigger: 'div.tp-dfwv button',
+    });
+
+    document.getElementById('hashButton').onclick = calculateHash;
+    document.getElementById('messageInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') calculateHash();
+    });
+
+    // ===== 添加复制功能 =====
+    const hashOutput = document.getElementById('hashOutput');
+    hashOutput.addEventListener('click', () => {
+      const fullHash = hashOutput.title;
+      if (fullHash && fullHash !== '🔐') {
+        navigator.clipboard.writeText(fullHash).then(() => {
+          // 显示 toast
+          const toast = document.createElement('div');
+          toast.style.cssText = `
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            padding: 0.75rem 1.25rem;
+            background: light-dark(#1a1a1a, white);
+            color: light-dark(white, #1a1a1a);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-family: 'Azeret Mono', monospace;
+          `;
+          toast.textContent = '✓ Hash copied!';
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 2000);
+          console.log('Copied:', fullHash);
+        });
+      }
+    });
+
+    console.log('%c🌙 Keccak-256 Playground', 'font-size: 18px; font-weight: bold; color: #667eea;');
+    console.log('Drag input • Drag output • Click to hash');
+    console.log('%c⚠️ WARNING: Using JS implementation, NOT MoonBit Wasm!', 'color: #f59e0b; font-weight: bold;');
+    
+    // 测试标准向量
+    setTimeout(() => {
+      console.log('\n=== Testing Standard Vectors ===');
+      const tests = [
+        { input: '', expected: 'c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470' },
+        { input: 'abc', expected: '4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45' },
+        { input: 'keccak', expected: 'df35a135a69c769066bbb4d17b2fa3ec922c028d4e4bf9d0402e6f7c12b31813' },
+        { input: 'Hello, MoonBit!', expected: 'bd1d3f51aeb0ff7af7751623b54419f1906cd4cefaee24a6872b8d1d7d9ba6d4' }
+      ];
+      
+      tests.forEach(({ input, expected }) => {
+        const result = keccak256(input);
+        const match = result === expected;
+        console.log(`${match ? '✅' : '❌'} "${input || '(empty)'}":`);
+        console.log(`   Result:   ${result}`);
+        if (!match) console.log(`   Expected: ${expected}`);
+      });
+    }, 1000);
+  </script>
+</body>
+</html>

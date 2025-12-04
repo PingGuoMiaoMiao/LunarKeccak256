@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "PingGuoMiaoMiao/LunarKeccak256/cmd/lib"
+
+// Values
+fn keccak256(Array[Byte]) -> Array[Byte]
+
+fn keccak256_hex(Array[Byte]) -> String
+
+fn keccak256_string(String) -> Array[Byte]
+
+fn keccak256_string_hex(String) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

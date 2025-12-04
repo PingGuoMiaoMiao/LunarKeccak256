@@ -2,7 +2,7 @@
   "is-main": true,
   "import": [
     {
-      "path": "PingGuoMiaoMiao/LunarKeccak256",
+      "path": "PingGuoMiaoMiao/LunarKeccak256/cmd/lib",
       "alias": "lib"
     }
   ]
