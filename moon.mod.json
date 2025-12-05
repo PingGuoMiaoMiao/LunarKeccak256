@@ -5,8 +5,8 @@
     "moonbitlang/x": "0.4.37"
   },
   "readme": "README.mbt.md",
-  "repository": "",
+  "repository": "https://github.com/PingGuoMiaoMiao/LunarKeccak256",
   "license": "Apache-2.0",
-  "keywords": [],
-  "description": ""
+  "keywords": ["keccak", "hash", "sha3", "cryptography"],
+  "description": "一个使用 MoonBit 语言实现的 Keccak256 哈希算法库。Keccak256 是 SHA-3 标准的一部分，广泛应用于区块链和密码学领域。"
 }
