@@ -14,45 +14,68 @@ Keccak256 是 SHA-3 标准的一部分，广泛应用于区块链和密码学领
 - ✅ 256 位（32 字节）输出
 - ✅ 纯 MoonBit 实现，无外部依赖
 - ✅ 包含完整的测试用例
+- ✅ 字符串哈希接口完全可用
+
+## ⚠️ 已知限制
+
+由于 MoonBit 语言中 `FixedArray[Byte]` 和 `Array[Byte]` 之间转换的限制，当前存在以下限制：
+
+- ⚠️ **字节数组哈希**: 直接对字节数组进行哈希可能导致段错误
+- ✅ **字符串哈希**: 字符串接口完全可用，推荐使用
+- ❌ **以太坊集成**: 无法直接用于标准以太坊交易签名和地址生成
+
+**推荐使用方式**: 优先使用字符串接口 (`keccak256_string` 和 `keccak256_string_hex`)
+
+详细的限制说明和解决方案请参考 [STATUS.md](STATUS.md)
 
 ## 使用方法
 
-### 基本用法
+### 基本用法（推荐）
 
 ```moonbit
-// 计算字符串的哈希值（返回十六进制字符串）
-let hash = @lib.keccak256_string_hex("Hello, World!")
-println(hash)
-
-// 计算字节数组的哈希值
-let bytes : Array[Byte] = [b'\x01', b'\x02', b'\x03']
-let hash_hex = @lib.keccak256_hex(bytes)
+// ✅ 推荐：计算字符串的哈希值（返回十六进制字符串）
+let hash_hex = @lib.keccak256_string_hex("Hello, World!")
 println(hash_hex)
 
-// 获取字节数组形式的哈希值
+// ✅ 推荐：获取字节数组形式的哈希值
 let hash_bytes = @lib.keccak256_string("test")
 // hash_bytes 是一个 32 字节的数组
 ```
 
+### 字节数组哈希（⚠️ 不推荐）
+
+```moonbit
+// ⚠️ 警告：由于 MoonBit 数组转换限制，字节数组哈希可能导致段错误
+// 建议：先转换为十六进制字符串，然后使用字符串接口
+let bytes : Array[Byte] = [b'\x01', b'\x02', b'\x03']
+// let hash_hex = @lib.keccak256_hex(bytes)  // 可能导致 SIGSEGV
+```
+
 ### API 文档
 
-#### 主要函数
+#### 推荐使用的函数（✅ 稳定）
+
+- `keccak256_string(message : String) -> Array[Byte]`
+  
+  计算字符串的 Keccak256 哈希值，返回 32 字节的哈希结果。**推荐使用**。
+
+- `keccak256_string_hex(message : String) -> String`
+  
+  计算字符串的 Keccak256 哈希值，返回 64 字符的十六进制字符串。**推荐使用**。
+
+#### 不推荐使用的函数（⚠️ 可能有风险）
 
 - `keccak256(message : Array[Byte]) -> Array[Byte]`
   
   计算字节数组的 Keccak256 哈希值，返回 32 字节的哈希结果。
+  
+  ⚠️ **警告**: 由于 MoonBit 数组转换限制，此函数可能导致段错误（SIGSEGV）。建议使用字符串接口替代。
 
 - `keccak256_hex(message : Array[Byte]) -> String`
   
   计算字节数组的 Keccak256 哈希值，返回 64 字符的十六进制字符串。
-
-- `keccak256_string(message : String) -> Array[Byte]`
   
-  计算字符串的 Keccak256 哈希值，返回 32 字节的哈希结果。
-
-- `keccak256_string_hex(message : String) -> String`
-  
-  计算字符串的 Keccak256 哈希值，返回 64 字符的十六进制字符串。
+  ⚠️ **警告**: 由于 MoonBit 数组转换限制，此函数可能导致段错误（SIGSEGV）。建议使用 `keccak256_string_hex()` 替代。
 
 ## 运行示例
 
